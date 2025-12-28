@@ -1,274 +1,165 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Custom Block Console</title>
-  <style>
-    body {
-      margin: 0;
-      background: black;
-      color: #00ff00;
-      font-family: monospace;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    #console {
-      padding: 10px;
-      height: calc(100vh - 30px);
-      overflow-y: auto;
-      white-space: pre-wrap;
-    }
-
-    #input {
-      width: 100%;
-      border: none;
-      outline: none;
-      background: black;
-      color: #00ff00;
-      font-family: monospace;
-      font-size: 16px;
-    }
-
-    #editor {
-      display: none;
-      width: 100%;
-      height: 100vh;
-      background: black;
-      color: #00ff00;
-      border: none;
-      outline: none;
-      font-family: monospace;
-      font-size: 16px;
-      padding: 10px;
-      box-sizing: border-box;
-    }
-
-    #saveBtn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      display: none;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Custom Console</title>
+<style>
+  body { background: #111; color: #0f0; font-family: monospace; margin:0; }
+  #console { width: 100%; height: 100vh; padding: 10px; box-sizing: border-box; overflow-y: auto; }
+  input { width: 100%; background: #111; color: #0f0; border: none; outline: none; font-family: monospace; font-size: 16px; }
+  #saveModal { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#222; padding:20px; border:2px solid #0f0; }
+  #saveModal input { width: 100%; margin-top:10px; }
+</style>
 </head>
 <body>
 
 <div id="console"></div>
-<input id="input" placeholder="Type a command..." autocomplete="off">
-<textarea id="editor" placeholder="Type your blocks here..."></textarea>
-<button id="saveBtn">Save</button>
+<input id="commandInput" placeholder="Type a command..." autocomplete="off">
+
+<div id="saveModal">
+  <div>Enter file name:</div>
+  <input id="filenameInput">
+  <button onclick="saveFile()">Save</button>
+</div>
 
 <script>
-  const consoleEl = document.getElementById("console");
-  const inputEl = document.getElementById("input");
-  const editorEl = document.getElementById("editor");
-  const saveBtn = document.getElementById("saveBtn");
+const consoleDiv = document.getElementById('console');
+const input = document.getElementById('commandInput');
+const saveModal = document.getElementById('saveModal');
+const filenameInput = document.getElementById('filenameInput');
 
-  let files = {};
-  let vars = {};
-  let commands = {};
-  let running = false;
+let files = {};  // stores all files and their code
+let currentFile = null;
+let currentCommands = {}; // stores custom commands for current file
+let counter = 0;
+let counterInterval = null;
+let counterPaused = false;
 
-  function print(text = "") {
-    consoleEl.innerHTML += text + "\n";
-    consoleEl.scrollTop = consoleEl.scrollHeight;
+function log(msg) {
+  consoleDiv.innerHTML += msg + "<br>";
+  consoleDiv.scrollTop = consoleDiv.scrollHeight;
+}
+
+function showHelp() {
+  log("/help - show this help");
+  log("/new - create a new file");
+  log("/run filename - run a file");
+  log("/exit - exit current file");
+}
+
+function openNewFile() {
+  currentFile = { code: "", commands: {} };
+  currentCommands = currentFile.commands;
+  log("Editing new file. Type code below:");
+  input.placeholder = "Type your code here...";
+  input.focus();
+}
+
+function saveFile() {
+  const name = filenameInput.value.trim();
+  if(name) {
+    files[name] = currentFile;
+    currentFile = null;
+    currentCommands = {};
+    saveModal.style.display = 'none';
+    input.placeholder = "Type a command...";
+    log(`File '${name}' saved.`);
   }
+}
 
-  print("Custom Block Console v3");
-  print("Type /help for commands");
-
-  inputEl.addEventListener("keydown", e => {
-    if (e.key === "Enter") {
-      const cmd = inputEl.value.trim();
-      print("> " + cmd);
-
-      if (cmd === "/exit") {
-        if (running) {
-          running = false;
-          print("[runtime] program exited");
-        } else {
-          print("[runtime] nothing running");
-        }
-        inputEl.value = "";
-        return;
-      }
-
-      handleCommand(cmd);
-      inputEl.value = "";
-    }
-  });
-
-  function handleCommand(cmd) {
-    const parts = cmd.split(" ");
-    const base = parts[0];
-
-    if (base === "/help") {
-      print("");
-      print("/help - show commands");
-      print("/new - create new file");
-      print("/run <filename> - run file");
-      print("/exit - stop program");
-    }
-
-    else if (base === "/new") {
-      editorEl.value = "";
-      editorEl.style.display = "block";
-      saveBtn.style.display = "block";
-      consoleEl.style.display = "none";
-      inputEl.style.display = "none";
-    }
-
-    else if (base === "/run") {
-      const name = parts[1];
-      if (!files[name]) {
-        print("File not found");
-        return;
-      }
-      runProgram(files[name]);
-    }
-
-    else {
-      print("Unknown command");
-    }
+function runFile(name) {
+  if(!files[name]) {
+    log(`File '${name}' not found.`);
+    return;
   }
+  const file = files[name];
+  currentFile = file;
+  currentCommands = file.commands;
+  log(`Running file '${name}'...`);
+  executeCode(file.code);
+}
 
-  saveBtn.onclick = () => {
-    const name = prompt("File name:");
-    if (!name) return;
-
-    files[name] = editorEl.value;
-
-    editorEl.style.display = "none";
-    saveBtn.style.display = "none";
-    consoleEl.style.display = "block";
-    inputEl.style.display = "block";
-
-    print(`Saved "${name}"`);
-  };
-
-  async function runProgram(code) {
-    consoleEl.innerHTML = "";
-    vars = {};
-    commands = {};
-    running = true;
-
-    const lines = code.split("\n");
-    const runIndex = lines.findIndex(l => l.trim() === "on run");
-
-    if (runIndex === -1) {
-      print("FATAL ERROR: no 'on run' block found");
-      running = false;
-      return;
+function executeCode(code) {
+  const lines = code.split("\n");
+  for(let line of lines) {
+    line = line.trim();
+    if(line.startsWith("if run")) {
+      // execute immediately
+      const cmd = line.replace("if run", "").trim();
+      runCustomCommand(cmd);
     }
-
-    const runEnd = findEnd(lines, runIndex + 1);
-
-    print("[runtime] program starting...\n");
-
-    await executeBlock(lines, runIndex + 1, runEnd);
-
-    if (running) print("\n[runtime] program finished");
-    running = false;
-  }
-
-  async function executeBlock(lines, start, end) {
-    for (let i = start; i < end && running; i++) {
-      let line = lines[i].trim();
-      if (!line || line === "end") continue;
-
+    else if(line.startsWith("command ")) {
       const parts = line.split(" ");
+      const cmdName = parts[1];
+      const cmdCode = line.substring(line.indexOf("{")+1, line.lastIndexOf("}")).trim();
+      currentCommands[cmdName] = cmdCode;
+    }
+    else if(line.startsWith("loop counter")) {
+      startCounter();
+    }
+  }
+}
 
-      if (parts[0] === "say") {
-        print(resolveVars(line.slice(4)));
-      }
+function startCounter() {
+  if(counterInterval) clearInterval(counterInterval);
+  counterInterval = setInterval(()=>{
+    if(!counterPaused) {
+      counter++;
+    }
+  }, 1000);
+}
 
-      else if (parts[0] === "wait") {
-        await sleep(Number(parts[1]) || 0);
-      }
+function runCustomCommand(name) {
+  if(currentCommands[name]) {
+    executeCode(currentCommands[name]);
+  } else {
+    log(`Command '${name}' not found in this file.`);
+  }
+}
 
-      else if (parts[0] === "set") {
-        vars[parts[1]] = resolveValue(parts.slice(3).join(" "));
-      }
-
-      else if (parts[0] === "change") {
-        vars[parts[1]] = (Number(vars[parts[1]]) || 0) + Number(parts[3]);
-      }
-
-      else if (parts[0] === "repeat") {
-        const count = Number(parts[1]);
-        const blockEnd = findEnd(lines, i + 1);
-        for (let r = 0; r < count && running; r++) {
-          await executeBlock(lines, i + 1, blockEnd);
-        }
-        i = blockEnd;
-      }
-
-      else if (parts[0] === "forever") {
-        const blockEnd = findEnd(lines, i + 1);
-        while (running) {
-          await executeBlock(lines, i + 1, blockEnd);
-        }
-        i = blockEnd;
-      }
-
-      else if (parts[0] === "if") {
-        const blockEnd = findEnd(lines, i + 1);
-        if (String(vars[parts[1]]) === parts[3]) {
-          await executeBlock(lines, i + 1, blockEnd);
-        }
-        i = blockEnd;
-      }
-
-      else if (parts[0] === "define") {
-        const name = parts[1];
-        const blockEnd = findEnd(lines, i + 1);
-        commands[name] = lines.slice(i + 1, blockEnd);
-        i = blockEnd;
-      }
-
-      else if (commands[parts[0]]) {
-        await executeBlock(commands[parts[0]], 0, commands[parts[0]].length);
-      }
-
-      else {
-        print(`RUNTIME ERROR: unknown block "${line}"`);
-        running = false;
+input.addEventListener("keydown", e=>{
+  if(e.key === "Enter") {
+    const cmd = input.value.trim();
+    input.value = "";
+    
+    if(cmd === "/help") showHelp();
+    else if(cmd === "/new") saveCurrentAndNew();
+    else if(cmd.startsWith("/run ")) {
+      const name = cmd.split(" ")[1];
+      runFile(name);
+    }
+    else if(cmd === "/exit") {
+      currentFile = null;
+      currentCommands = {};
+      log("Exited current file.");
+    }
+    else if(currentFile && currentCommands[cmd]) {
+      runCustomCommand(cmd);
+    }
+    else {
+      if(currentFile) {
+        currentFile.code += cmd + "\n";
+      } else {
+        log(`Unknown command: ${cmd}`);
       }
     }
   }
+});
 
-  function findEnd(lines, start) {
-    let depth = 1;
-    for (let i = start; i < lines.length; i++) {
-      const t = lines[i].trim();
-      if (
-        t.startsWith("repeat") ||
-        t.startsWith("if") ||
-        t.startsWith("define") ||
-        t.startsWith("forever") ||
-        t === "on run"
-      ) depth++;
-      if (t === "end") depth--;
-      if (depth === 0) return i;
-    }
-    return lines.length;
+function saveCurrentAndNew() {
+  if(currentFile) {
+    saveModal.style.display = 'block';
+    filenameInput.value = "";
+    filenameInput.focus();
+  } else {
+    openNewFile();
   }
+}
 
-  function resolveVars(text) {
-    return text.replace(/\b[a-zA-Z_]\w*\b/g, v =>
-      vars[v] !== undefined ? vars[v] : v
-    );
-  }
+// initial
+log("Welcome to the Custom Console!");
+showHelp();
 
-  function resolveValue(val) {
-    return isNaN(val) ? val : Number(val);
-  }
-
-  function sleep(ms) {
-    return new Promise(r => setTimeout(r, ms));
-  }
 </script>
-
 </body>
 </html>
