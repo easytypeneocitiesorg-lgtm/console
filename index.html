@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Custom Console</title>
+  <style>
+    body {
+      margin: 0;
+      background: black;
+      color: #00ff00;
+      font-family: monospace;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #console {
+      padding: 10px;
+      height: calc(100vh - 30px);
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    #input {
+      width: 100%;
+      border: none;
+      outline: none;
+      background: black;
+      color: #00ff00;
+      font-family: monospace;
+      font-size: 16px;
+    }
+
+    #editor {
+      display: none;
+      width: 100%;
+      height: 100vh;
+      background: black;
+      color: #00ff00;
+      border: none;
+      outline: none;
+      font-family: monospace;
+      font-size: 16px;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+
+    button {
+      position: absolute;
+      padding: 6px 10px;
+      font-family: monospace;
+    }
+
+    #saveBtn {
+      top: 10px;
+      right: 10px;
+      display: none;
+    }
+
+    #exitBtn {
+      top: 10px;
+      left: 10px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="console"></div>
+<input id="input" placeholder="Type a command..." autocomplete="off" />
+
+<textarea id="editor" placeholder="Describe what you want the program to do..."></textarea>
+
+<button id="saveBtn">Save</button>
+<button id="exitBtn">Exit</button>
+
+<script>
+  const consoleEl = document.getElementById("console");
+  const inputEl = document.getElementById("input");
+  const editorEl = document.getElementById("editor");
+  const saveBtn = document.getElementById("saveBtn");
+  const exitBtn = document.getElementById("exitBtn");
+
+  let files = {};
+  let currentFile = null;
+  let mode = "console";
+
+  function print(text = "") {
+    consoleEl.innerHTML += text + "\n";
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+
+  print("Custom Console v1");
+  print("Type /help for commands");
+
+  inputEl.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      const cmd = inputEl.value.trim();
+      print("> " + cmd);
+      handleCommand(cmd);
+      inputEl.value = "";
+    }
+  });
+
+  function handleCommand(cmd) {
+    const parts = cmd.split(" ");
+    const base = parts[0];
+
+    if (base === "/help") {
+      print("");
+      print("/help - show commands");
+      print("/new - create new file");
+      print("/run <filename> - run file");
+    }
+
+    else if (base === "/new") {
+      mode = "editor";
+      editorEl.value = "";
+      editorEl.style.display = "block";
+      saveBtn.style.display = "block";
+      inputEl.style.display = "none";
+      consoleEl.style.display = "none";
+    }
+
+    else if (base === "/run") {
+      const name = parts[1];
+      if (!files[name]) {
+        print("File not found");
+        return;
+      }
+
+      mode = "run";
+      currentFile = name;
+      consoleEl.innerHTML = "";
+      print("Running: " + name);
+      print("");
+      print(files[name]);
+
+      exitBtn.style.display = "block";
+      inputEl.style.display = "none";
+    }
+
+    else {
+      print("Unknown command");
+    }
+  }
+
+  saveBtn.onclick = () => {
+    const name = prompt("File name:");
+    if (!name) return;
+
+    files[name] = editorEl.value;
+
+    editorEl.style.display = "none";
+    saveBtn.style.display = "none";
+    consoleEl.style.display = "block";
+    inputEl.style.display = "block";
+
+    mode = "console";
+    print(`Saved "${name}"`);
+  };
+
+  exitBtn.onclick = () => {
+    exitBtn.style.display = "none";
+    consoleEl.innerHTML = "";
+    print("Custom Console v1");
+    print("Type /help for commands");
+    inputEl.style.display = "block";
+    mode = "console";
+  };
+</script>
+
+</body>
+</html>
