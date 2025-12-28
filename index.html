@@ -47,6 +47,19 @@ body {
   padding: 10px;
   box-sizing: border-box;
 }
+
+#saveBtn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: none;
+  background: black;
+  color: #00ff00;
+  border: 1px solid #00ff00;
+  font-family: monospace;
+  padding: 5px 10px;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -54,11 +67,13 @@ body {
 <div id="console"></div>
 <input id="input" placeholder="Type a command..." autocomplete="off">
 <textarea id="editor" placeholder="Type your blocks here..."></textarea>
+<button id="saveBtn">Save</button>
 
 <script>
 const consoleEl = document.getElementById("console");
 const inputEl = document.getElementById("input");
 const editorEl = document.getElementById("editor");
+const saveBtn = document.getElementById("saveBtn");
 
 let files = {};
 let vars = {};
@@ -182,19 +197,21 @@ async function runProgram(name) {
 function openEditor() {
   editorEl.value = "";
   editorEl.style.display = "block";
+  saveBtn.style.display = "block";
   consoleEl.style.display = "none";
   inputEl.style.display = "none";
 }
 
-function closeEditorAndSave() {
+saveBtn.onclick = () => {
   const name = prompt("File name:");
   if (!name) return;
   files[name] = editorEl.value;
   editorEl.style.display = "none";
+  saveBtn.style.display = "none";
   consoleEl.style.display = "block";
   inputEl.style.display = "block";
   print(`Saved "${name}"`);
-}
+};
 
 inputEl.addEventListener("keydown", async e => {
   if (e.key !== "Enter") return;
@@ -211,7 +228,6 @@ inputEl.addEventListener("keydown", async e => {
   }
   else if (cmd === "/new") {
     openEditor();
-    setTimeout(closeEditorAndSave, 1);
   }
   else if (cmd.startsWith("/run ")) {
     const name = cmd.split(" ")[1];
@@ -229,7 +245,7 @@ inputEl.addEventListener("keydown", async e => {
   }
 });
 
-print("Custom Block Console v4");
+print("Custom Block Console v5");
 print("Type /help for commands");
 </script>
 </body>
