@@ -55,33 +55,24 @@
       right: 10px;
       display: none;
     }
-
-    #exitBtn {
-      top: 10px;
-      left: 10px;
-      display: none;
-    }
   </style>
 </head>
 <body>
 
 <div id="console"></div>
 <input id="input" placeholder="Type a command..." autocomplete="off">
-
 <textarea id="editor" placeholder="Type your blocks here..."></textarea>
-
 <button id="saveBtn">Save</button>
-<button id="exitBtn">Exit</button>
 
 <script>
   const consoleEl = document.getElementById("console");
   const inputEl = document.getElementById("input");
   const editorEl = document.getElementById("editor");
   const saveBtn = document.getElementById("saveBtn");
-  const exitBtn = document.getElementById("exitBtn");
 
   let files = {};
   let vars = {};
+  let commands = {};
   let running = false;
 
   function print(text = "") {
@@ -89,13 +80,20 @@
     consoleEl.scrollTop = consoleEl.scrollHeight;
   }
 
-  print("Custom Block Console v1");
+  print("Custom Block Console v2");
   print("Type /help for commands");
 
   inputEl.addEventListener("keydown", e => {
     if (e.key === "Enter") {
       const cmd = inputEl.value.trim();
       print("> " + cmd);
+
+      if (running && cmd === "/exit") {
+        running = false;
+        print("[runtime] program exited");
+        return;
+      }
+
       handleCommand(cmd);
       inputEl.value = "";
     }
@@ -110,6 +108,7 @@
       print("/help - show commands");
       print("/new - create new file");
       print("/run <filename> - run file");
+      print("/exit - stop running program");
     }
 
     else if (base === "/new") {
@@ -148,28 +147,18 @@
     print(`Saved "${name}"`);
   };
 
-  exitBtn.onclick = () => {
-    running = false;
-    exitBtn.style.display = "none";
-    print("\n[runtime] program exited");
-  };
-
   async function runProgram(code) {
     consoleEl.innerHTML = "";
     vars = {};
+    commands = {};
     running = true;
-    exitBtn.style.display = "block";
 
     const lines = code.split("\n");
 
-    const runIndex = lines.findIndex(
-      l => l.trim().toLowerCase() === "on run"
-    );
-
+    const runIndex = lines.findIndex(l => l.trim() === "on run");
     if (runIndex === -1) {
       print("FATAL ERROR: no 'on run' block found");
       running = false;
-      exitBtn.style.display = "none";
       return;
     }
 
@@ -179,9 +168,8 @@
 
     await executeBlock(lines, runIndex + 1, runEnd);
 
+    if (running) print("\n[runtime] program finished");
     running = false;
-    exitBtn.style.display = "none";
-    print("\n[runtime] program finished");
   }
 
   async function executeBlock(lines, start, end) {
@@ -192,8 +180,7 @@
       const parts = line.split(" ");
 
       if (parts[0] === "say") {
-        const msg = line.slice(4);
-        print(resolveVars(msg));
+        print(resolveVars(line.slice(4)));
       }
 
       else if (parts[0] === "wait") {
@@ -205,8 +192,7 @@
       }
 
       else if (parts[0] === "change") {
-        const v = parts[1];
-        vars[v] = (Number(vars[v]) || 0) + Number(parts[3]);
+        vars[parts[1]] = (Number(vars[parts[1]]) || 0) + Number(parts[3]);
       }
 
       else if (parts[0] === "repeat") {
@@ -219,13 +205,27 @@
       }
 
       else if (parts[0] === "if") {
-        const v = parts[1];
-        const value = parts[3];
         const blockEnd = findEnd(lines, i + 1);
-        if (String(vars[v]) === value) {
+        if (String(vars[parts[1]]) === parts[3]) {
           await executeBlock(lines, i + 1, blockEnd);
         }
         i = blockEnd;
+      }
+
+      else if (parts[0] === "define") {
+        const name = parts[1];
+        const blockEnd = findEnd(lines, i + 1);
+        commands[name] = lines.slice(i + 1, blockEnd);
+        i = blockEnd;
+      }
+
+      else if (commands[parts[0]]) {
+        await executeBlock(commands[parts[0]], 0, commands[parts[0]].length);
+      }
+
+      else {
+        print(`RUNTIME ERROR: unknown block "${line}"`);
+        running = false;
       }
     }
   }
@@ -234,7 +234,7 @@
     let depth = 1;
     for (let i = start; i < lines.length; i++) {
       const t = lines[i].trim();
-      if (t.startsWith("repeat") || t.startsWith("if") || t === "on run") depth++;
+      if (t.startsWith("repeat") || t.startsWith("if") || t.startsWith("define") || t === "on run") depth++;
       if (t === "end") depth--;
       if (depth === 0) return i;
     }
