@@ -44,13 +44,8 @@
       box-sizing: border-box;
     }
 
-    button {
-      position: absolute;
-      padding: 6px 10px;
-      font-family: monospace;
-    }
-
     #saveBtn {
+      position: absolute;
       top: 10px;
       right: 10px;
       display: none;
@@ -80,7 +75,7 @@
     consoleEl.scrollTop = consoleEl.scrollHeight;
   }
 
-  print("Custom Block Console v2");
+  print("Custom Block Console v3");
   print("Type /help for commands");
 
   inputEl.addEventListener("keydown", e => {
@@ -88,9 +83,14 @@
       const cmd = inputEl.value.trim();
       print("> " + cmd);
 
-      if (running && cmd === "/exit") {
-        running = false;
-        print("[runtime] program exited");
+      if (cmd === "/exit") {
+        if (running) {
+          running = false;
+          print("[runtime] program exited");
+        } else {
+          print("[runtime] nothing running");
+        }
+        inputEl.value = "";
         return;
       }
 
@@ -108,7 +108,7 @@
       print("/help - show commands");
       print("/new - create new file");
       print("/run <filename> - run file");
-      print("/exit - stop running program");
+      print("/exit - stop program");
     }
 
     else if (base === "/new") {
@@ -154,8 +154,8 @@
     running = true;
 
     const lines = code.split("\n");
-
     const runIndex = lines.findIndex(l => l.trim() === "on run");
+
     if (runIndex === -1) {
       print("FATAL ERROR: no 'on run' block found");
       running = false;
@@ -204,6 +204,14 @@
         i = blockEnd;
       }
 
+      else if (parts[0] === "forever") {
+        const blockEnd = findEnd(lines, i + 1);
+        while (running) {
+          await executeBlock(lines, i + 1, blockEnd);
+        }
+        i = blockEnd;
+      }
+
       else if (parts[0] === "if") {
         const blockEnd = findEnd(lines, i + 1);
         if (String(vars[parts[1]]) === parts[3]) {
@@ -234,7 +242,13 @@
     let depth = 1;
     for (let i = start; i < lines.length; i++) {
       const t = lines[i].trim();
-      if (t.startsWith("repeat") || t.startsWith("if") || t.startsWith("define") || t === "on run") depth++;
+      if (
+        t.startsWith("repeat") ||
+        t.startsWith("if") ||
+        t.startsWith("define") ||
+        t.startsWith("forever") ||
+        t === "on run"
+      ) depth++;
       if (t === "end") depth--;
       if (depth === 0) return i;
     }
